@@ -30,33 +30,48 @@ jobs:
             exit 1
           fi
           echo "✅ Archivo JSON válido"
+          
+          # Extraer información del service account
+          PROJECT_ID=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key.json'))['project_id'])")
+          CLIENT_EMAIL=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key.json'))['client_email'])")
+          echo "📋 Project ID: $PROJECT_ID"
+          echo "📧 Service Account: $CLIENT_EMAIL"
 
       - name: 🔐 Autenticarse en Google Cloud con la cuenta de servicio
         run: |
-          gcloud auth activate-service-account kustomer@raw-superapp.iam.gserviceaccount.com --key-file=/tmp/gcloud-key.json
+          # Extraer project_id del JSON
+          PROJECT_ID=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key.json'))['project_id'])")
+          
+          # Autenticar sin especificar el email (se lee del JSON automáticamente)
+          gcloud auth activate-service-account --key-file=/tmp/gcloud-key.json
           gcloud auth list  # Verifica qué cuenta está autenticada
-          gcloud config set project raw-superapp
+          gcloud config set project $PROJECT_ID
 
       - name: 🛠️ Configurar Docker para autenticación con Container Registry
         run: |
+          PROJECT_ID=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key.json'))['project_id'])")
           gcloud auth configure-docker gcr.io
-          gcloud config set project raw-superapp
+          gcloud config set project $PROJECT_ID
 
       - name: 🏗️ Construir la imagen Docker con GitHub token
         run: |
+          PROJECT_ID=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key.json'))['project_id'])")
           docker build \
             --build-arg GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN_PRIVATE }} \
-            -t gcr.io/raw-superapp/dbt-mcp-server:${{ github.sha }} \
+            -t gcr.io/$PROJECT_ID/dbt-mcp-server:${{ github.sha }} \
             .
 
       - name: 🚀 Subir la imagen a Container Registry
         run: |
-          docker push gcr.io/raw-superapp/dbt-mcp-server:${{ github.sha }}
+          PROJECT_ID=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key.json'))['project_id'])")
+          docker push gcr.io/$PROJECT_ID/dbt-mcp-server:${{ github.sha }}
 
       - name: 🌐 Desplegar o actualizar Cloud Run Service
         run: |
+          PROJECT_ID=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key.json'))['project_id'])")
+          
           gcloud run deploy dbt-mcp-server \
-            --image=gcr.io/raw-superapp/dbt-mcp-server:${{ github.sha }} \
+            --image=gcr.io/$PROJECT_ID/dbt-mcp-server:${{ github.sha }} \
             --platform=managed \
             --region=us-central1 \
             --allow-unauthenticated \
@@ -80,7 +95,9 @@ jobs:
 
       - name: 📊 Mostrar información del servicio desplegado
         run: |
+          PROJECT_ID=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key.json'))['project_id'])")
+          
           SERVICE_URL=$(gcloud run services describe dbt-mcp-server --region=us-central1 --format="value(status.url)")
           echo "✅ Deployment completed successfully!"
           echo "🌐 Service URL: $SERVICE_URL"
-          echo "📊 Console: https://console.cloud.google.com/run/detail/us-central1/dbt-mcp-server/metrics?project=raw-superapp"
+          echo "📊 Console: https://console.cloud.google.com/run/detail/us-central1/dbt-mcp-server/metrics?project=$PROJECT_ID"
