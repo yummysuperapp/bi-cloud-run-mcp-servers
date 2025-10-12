@@ -15,8 +15,21 @@ jobs:
 
       - name: 🔑 Crear archivo de credenciales en el runner
         run: |
-          echo '${{ secrets.GCR_JSON_KEY }}' > /tmp/gcloud-key.json
+          cat <<'EOT' > /tmp/gcloud-key.json
+          ${{ secrets.GCR_JSON_KEY }}
+          EOT
           chmod 600 /tmp/gcloud-key.json
+
+      - name: 🔍 Verificar formato del archivo de credenciales
+        run: |
+          echo "Verificando que el archivo JSON sea válido..."
+          if ! python3 -m json.tool /tmp/gcloud-key.json > /dev/null 2>&1; then
+            echo "❌ Error: El archivo JSON no es válido"
+            echo "Primeras líneas del archivo:"
+            head -n 5 /tmp/gcloud-key.json
+            exit 1
+          fi
+          echo "✅ Archivo JSON válido"
 
       - name: 🔐 Autenticarse en Google Cloud con la cuenta de servicio
         run: |
