@@ -47,10 +47,34 @@ jobs:
           gcloud auth list  # Verifica qué cuenta está autenticada
           gcloud config set project $PROJECT_ID
 
-      - name: 🛠️ Configurar Docker para autenticación con Container Registry
+      - name: 🔧 Habilitar Artifact Registry API
         run: |
           PROJECT_ID=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key.json'))['project_id'])")
-          gcloud auth configure-docker gcr.io
+          echo "Habilitando Artifact Registry API..."
+          gcloud services enable artifactregistry.googleapis.com --project=$PROJECT_ID
+
+      - name: 📦 Crear repositorio en Artifact Registry (si no existe)
+        run: |
+          PROJECT_ID=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key.json'))['project_id'])")
+          REGION="us-central1"
+          REPO_NAME="cloud-run-source-deploy"
+          
+          # Verificar si el repositorio existe
+          if ! gcloud artifacts repositories describe $REPO_NAME --location=$REGION --project=$PROJECT_ID 2>/dev/null; then
+            echo "Creando repositorio de Artifact Registry..."
+            gcloud artifacts repositories create $REPO_NAME \
+              --repository-format=docker \
+              --location=$REGION \
+              --description="Docker repository for Cloud Run deployments" \
+              --project=$PROJECT_ID
+          else
+            echo "Repositorio ya existe"
+          fi
+
+      - name: 🛠️ Configurar Docker para autenticación con Artifact Registry
+        run: |
+          PROJECT_ID=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key.json'))['project_id'])")
+          gcloud auth configure-docker us-central1-docker.pkg.dev
           gcloud config set project $PROJECT_ID
 
       - name: 🏗️ Construir la imagen Docker con GitHub token
@@ -58,20 +82,22 @@ jobs:
           PROJECT_ID=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key.json'))['project_id'])")
           docker build \
             --build-arg GITHUB_TOKEN=${{ secrets.GH_TOKEN }} \
-            -t gcr.io/$PROJECT_ID/dbt-mcp-server:${{ github.sha }} \
+            -t us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/dbt-mcp-server:${{ github.sha }} \
+            -t us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/dbt-mcp-server:latest \
             .
 
-      - name: 🚀 Subir la imagen a Container Registry
+      - name: 🚀 Subir la imagen a Artifact Registry
         run: |
           PROJECT_ID=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key.json'))['project_id'])")
-          docker push gcr.io/$PROJECT_ID/dbt-mcp-server:${{ github.sha }}
+          docker push us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/dbt-mcp-server:${{ github.sha }}
+          docker push us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/dbt-mcp-server:latest
 
       - name: 🌐 Desplegar o actualizar Cloud Run Service
         run: |
           PROJECT_ID=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key.json'))['project_id'])")
           
           gcloud run deploy dbt-mcp-server \
-            --image=gcr.io/$PROJECT_ID/dbt-mcp-server:${{ github.sha }} \
+            --image=us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/dbt-mcp-server:${{ github.sha }} \
             --platform=managed \
             --region=us-central1 \
             --allow-unauthenticated \
@@ -101,3 +127,6 @@ jobs:
           echo "✅ Deployment completed successfully!"
           echo "🌐 Service URL: $SERVICE_URL"
           echo "📊 Console: https://console.cloud.google.com/run/detail/us-central1/dbt-mcp-server/metrics?project=$PROJECT_ID"
+          echo ""
+          echo "🎯 Para conectar desde Claude Desktop, usa esta URL en tu configuración MCP:"
+          echo "   $SERVICE_URL/sse"
