@@ -57,7 +57,7 @@ jobs:
         run: |
           PROJECT_ID=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key.json'))['project_id'])")
           docker build \
-            --build-arg GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN_PRIVATE }} \
+            --build-arg GITHUB_TOKEN=${{ secrets.GH_TOKEN }} \
             -t gcr.io/$PROJECT_ID/dbt-mcp-server:${{ github.sha }} \
             .
 
