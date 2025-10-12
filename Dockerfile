@@ -16,7 +16,6 @@ RUN pip install uv
 ARG GITHUB_TOKEN
 
 # Clone the private dbt repository using the GitHub token
-# Replace with your own dbt repository URL
 RUN git clone https://${GITHUB_TOKEN}@github.com/yummysuperapp/bi-dbt-bigquery-models.git /app/bi-dbt-bigquery-models
 
 # Enter the cloned repository and set up dbt environment
@@ -53,6 +52,11 @@ COPY main.py src/dbt_mcp/main.py
 # Create dbt profiles directory and copy profiles.yml
 RUN mkdir -p /root/.dbt
 COPY profiles.yml /root/.dbt/profiles.yml
+
+# CRITICAL: Copy BigQuery credentials for dbt
+# This file contains the service account credentials for accessing BigQuery
+RUN mkdir -p /app/credentials
+COPY yummy-development.json /app/credentials/yummy-development.json
 
 # Create credentials directory for Secret Manager mount
 RUN mkdir -p /secret
