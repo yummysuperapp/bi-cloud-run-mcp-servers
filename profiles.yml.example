@@ -1,0 +1,17 @@
+default:
+  outputs:
+    dev:
+      dataset: dbt
+      keyfile: /app/credentials/yummy-development.json
+      method: service-account
+      project: your-project-id
+      threads: 4
+      type: bigquery
+    prod:
+      dataset: dbt_prod
+      keyfile: /app/credentials/production-yummy.json
+      method: service-account
+      project: your-project-id
+      threads: 4
+      type: bigquery
+  target: dev

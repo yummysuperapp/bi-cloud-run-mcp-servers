@@ -1,0 +1,11 @@
+default:
+  outputs:
+    dev:
+      dataset: dbt_rides
+      method: service-account
+      project: production-yummy
+      threads: 4
+      type: bigquery
+      # Para Cloud Run, intentará usar GOOGLE_APPLICATION_CREDENTIALS si está disponible
+      # De lo contrario, usará la autenticación predeterminada de Google Cloud
+  target: dev

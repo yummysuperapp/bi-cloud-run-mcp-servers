@@ -1,0 +1,44 @@
+# Archivos de configuración local
+config.local.sh
+*.local.sh
+
+# Credenciales y archivos sensibles
+service-account.json
+yummy-development.json
+production-yummy.json
+*.key
+*.pem
+*.p12
+.env
+.env.*
+!.env.example
+
+# Archivos JSON (excepto ejemplos)
+*.json
+!service-account.json.example
+!package.json
+!tsconfig.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+
+# dbt
+target/
+dbt_packages/
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
