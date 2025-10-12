@@ -64,13 +64,6 @@ jobs:
           DEPLOY_PROJECT=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key-deploy.json'))['project_id'])")
           gcloud config set project $DEPLOY_PROJECT
 
-      - name: 🔧 Habilitar APIs necesarias
-        run: |
-          DEPLOY_PROJECT=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key-deploy.json'))['project_id'])")
-          echo "Habilitando APIs en proyecto $DEPLOY_PROJECT..."
-          gcloud services enable artifactregistry.googleapis.com --project=$DEPLOY_PROJECT
-          gcloud services enable run.googleapis.com --project=$DEPLOY_PROJECT
-
       - name: 📦 Crear repositorio en Artifact Registry (si no existe)
         run: |
           DEPLOY_PROJECT=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key-deploy.json'))['project_id'])")
