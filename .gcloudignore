@@ -1,0 +1,48 @@
+# .gcloudignore
+# Archivos y directorios que no deben incluirse en Cloud Build
+
+# Variables de entorno locales
+.env
+.env.local
+.env.development
+
+# Archivos de Git
+.git/
+.gitignore
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Archivos temporales
+tmp/
+temp/
+*.tmp
+
+# Documentación
+README.md
+*.md
+
+# Archivos de editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Node modules si los hay
+node_modules/
+
+# No ignorar archivos que necesitamos para el build
+!main.py
+!profiles.yml
+!*.json

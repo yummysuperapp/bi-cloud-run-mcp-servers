@@ -1,0 +1,172 @@
+name: Deploy dbt MCP Server to Cloud Run
+
+on:
+  push:
+    branches:
+      - main  # Se ejecuta en cada push a la rama principal
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest  # Usa un runner de Ubuntu
+
+    steps:
+      - name: 📥 Clonar el repositorio
+        uses: actions/checkout@v4
+
+      - name: 🔑 Crear archivos de credenciales en el runner
+        run: |
+          # Service account para deployment (raw-superapp con permisos administrativos)
+          cat <<'EOT' > /tmp/gcloud-key-deploy.json
+          ${{ secrets.GCR_JSON_KEY_RAW_SUPERAPP }}
+          EOT
+          chmod 600 /tmp/gcloud-key-deploy.json
+          
+          # Service account para dbt/BigQuery (yummy-development con acceso a datos)
+          cat <<'EOT' > /tmp/gcloud-key-dbt.json
+          ${{ secrets.GCR_JSON_KEY }}
+          EOT
+          chmod 600 /tmp/gcloud-key-dbt.json
+          
+          # IMPORTANTE: Crear el archivo en el directorio de build para Docker
+          cat <<'EOT' > yummy-development.json
+          ${{ secrets.GCR_JSON_KEY }}
+          EOT
+          chmod 600 yummy-development.json
+
+      - name: 🔍 Verificar formato de los archivos de credenciales
+        run: |
+          echo "Verificando service account de deployment..."
+          if ! python3 -m json.tool /tmp/gcloud-key-deploy.json > /dev/null 2>&1; then
+            echo "❌ Error: GCR_JSON_KEY_RAW_SUPERAPP no es válido"
+            exit 1
+          fi
+          echo "✅ Service account de deployment válido"
+          
+          echo "Verificando service account de dbt..."
+          if ! python3 -m json.tool yummy-development.json > /dev/null 2>&1; then
+            echo "❌ Error: GCR_JSON_KEY no es válido"
+            exit 1
+          fi
+          echo "✅ Service account de dbt válido"
+          
+          # Extraer información
+          DEPLOY_PROJECT=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key-deploy.json'))['project_id'])")
+          DEPLOY_EMAIL=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key-deploy.json'))['client_email'])")
+          DBT_PROJECT=$(python3 -c "import json; print(json.load(open('yummy-development.json'))['project_id'])")
+          DBT_EMAIL=$(python3 -c "import json; print(json.load(open('yummy-development.json'))['client_email'])")
+          
+          echo "📋 Deployment Project: $DEPLOY_PROJECT"
+          echo "📧 Deployment SA: $DEPLOY_EMAIL"
+          echo "📋 dbt/BigQuery Project: $DBT_PROJECT"
+          echo "📧 dbt/BigQuery SA: $DBT_EMAIL"
+
+      - name: 🔐 Autenticarse en Google Cloud (con cuenta de deployment)
+        run: |
+          # Usar el service account con permisos administrativos para el deployment
+          gcloud auth activate-service-account --key-file=/tmp/gcloud-key-deploy.json
+          gcloud auth list
+          
+          # Configurar proyecto de deployment (raw-superapp)
+          DEPLOY_PROJECT=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key-deploy.json'))['project_id'])")
+          gcloud config set project $DEPLOY_PROJECT
+
+      - name: 📦 Crear repositorio en Artifact Registry (si no existe)
+        run: |
+          DEPLOY_PROJECT=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key-deploy.json'))['project_id'])")
+          REGION="us-central1"
+          REPO_NAME="cloud-run-source-deploy"
+          
+          if ! gcloud artifacts repositories describe $REPO_NAME --location=$REGION --project=$DEPLOY_PROJECT 2>/dev/null; then
+            echo "Creando repositorio de Artifact Registry..."
+            gcloud artifacts repositories create $REPO_NAME \
+              --repository-format=docker \
+              --location=$REGION \
+              --description="Docker repository for Cloud Run deployments" \
+              --project=$DEPLOY_PROJECT
+          else
+            echo "✅ Repositorio ya existe"
+          fi
+
+      - name: 🛠️ Configurar Docker para autenticación con Artifact Registry
+        run: |
+          DEPLOY_PROJECT=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key-deploy.json'))['project_id'])")
+          gcloud auth configure-docker us-central1-docker.pkg.dev
+          gcloud config set project $DEPLOY_PROJECT
+
+      - name: 🏗️ Construir la imagen Docker con GitHub token y credenciales
+        run: |
+          DEPLOY_PROJECT=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key-deploy.json'))['project_id'])")
+          
+          # Verificar que yummy-development.json existe
+          if [ ! -f "yummy-development.json" ]; then
+            echo "❌ Error: yummy-development.json no existe en el directorio"
+            exit 1
+          fi
+          
+          echo "✅ yummy-development.json encontrado, procediendo con el build..."
+          
+          docker build \
+            --build-arg GITHUB_TOKEN=${{ secrets.GH_TOKEN }} \
+            -t us-central1-docker.pkg.dev/$DEPLOY_PROJECT/cloud-run-source-deploy/dbt-mcp-server:${{ github.sha }} \
+            -t us-central1-docker.pkg.dev/$DEPLOY_PROJECT/cloud-run-source-deploy/dbt-mcp-server:latest \
+            .
+
+      - name: 🧹 Limpiar credenciales temporales
+        run: |
+          rm -f yummy-development.json
+          rm -f /tmp/gcloud-key-dbt.json
+          echo "✅ Credenciales temporales eliminadas"
+
+      - name: 🚀 Subir la imagen a Artifact Registry
+        run: |
+          DEPLOY_PROJECT=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key-deploy.json'))['project_id'])")
+          docker push us-central1-docker.pkg.dev/$DEPLOY_PROJECT/cloud-run-source-deploy/dbt-mcp-server:${{ github.sha }}
+          docker push us-central1-docker.pkg.dev/$DEPLOY_PROJECT/cloud-run-source-deploy/dbt-mcp-server:latest
+
+      - name: 🌐 Desplegar o actualizar Cloud Run Service
+        run: |
+          DEPLOY_PROJECT=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key-deploy.json'))['project_id'])")
+          
+          gcloud run deploy dbt-mcp-server \
+            --image=us-central1-docker.pkg.dev/$DEPLOY_PROJECT/cloud-run-source-deploy/dbt-mcp-server:${{ github.sha }} \
+            --platform=managed \
+            --region=us-central1 \
+            --allow-unauthenticated \
+            --memory=2Gi \
+            --cpu=2 \
+            --timeout=3600 \
+            --concurrency=10 \
+            --max-instances=5 \
+            --min-instances=0 \
+            --port=8080 \
+            --set-env-vars=ENVIRONMENT=production \
+            --set-env-vars=DBT_HOST=cloud.getdbt.com \
+            --set-env-vars=DBT_PROD_ENV_ID=${{ secrets.DBT_PROD_ENV_ID }} \
+            --set-env-vars=DBT_USER_ID=${{ secrets.DBT_USER_ID }} \
+            --set-env-vars=DBT_TOKEN=${{ secrets.DBT_TOKEN }} \
+            --set-env-vars=DBT_CLI_TIMEOUT=120 \
+            --set-env-vars=DBT_PROJECT_DIR=/app/bi-dbt-bigquery-models \
+            --set-env-vars=DBT_PATH=/app/bi-dbt-bigquery-models/dbt_env/bin/dbt \
+            --set-env-vars=DBT_PROFILES_DIR=/root/.dbt \
+            --set-env-vars=DISABLE_DBT_CLI=false \
+            --project=$DEPLOY_PROJECT
+
+      - name: 📊 Mostrar información del servicio desplegado
+        run: |
+          DEPLOY_PROJECT=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key-deploy.json'))['project_id'])")
+          DBT_PROJECT=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key-dbt.json'))['project_id'])" 2>/dev/null || echo "yummy-development")
+          
+          SERVICE_URL=$(gcloud run services describe dbt-mcp-server --region=us-central1 --project=$DEPLOY_PROJECT --format="value(status.url)")
+          echo ""
+          echo "✅ Deployment completed successfully!"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🌐 Service URL: $SERVICE_URL"
+          echo "📊 Console: https://console.cloud.google.com/run/detail/us-central1/dbt-mcp-server/metrics?project=$DEPLOY_PROJECT"
+          echo ""
+          echo "🔐 Service Accounts utilizados:"
+          echo "   • Deployment/CI/CD: $DEPLOY_PROJECT (raw-superapp)"
+          echo "   • dbt/BigQuery: $DBT_PROJECT"
+          echo ""
+          echo "🎯 Para conectar desde Claude Desktop, usa:"
+          echo "   $SERVICE_URL/sse"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

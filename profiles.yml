@@ -1,0 +1,10 @@
+default:
+  outputs:
+    dev:
+      dataset: dbt_rides
+      keyfile: /app/credentials/yummy-development.json
+      method: service-account
+      project: production-yummy
+      threads: 4
+      type: bigquery
+  target: dev
