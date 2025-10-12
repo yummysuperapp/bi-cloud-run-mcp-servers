@@ -1,0 +1,73 @@
+name: Deploy dbt MCP Server to Cloud Run
+
+on:
+  push:
+    branches:
+      - main  # Se ejecuta en cada push a la rama principal
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest  # Usa un runner de Ubuntu
+
+    steps:
+      - name: 📥 Clonar el repositorio
+        uses: actions/checkout@v4
+
+      - name: 🔑 Crear archivo de credenciales en el runner
+        run: |
+          echo '${{ secrets.GCR_JSON_KEY }}' > /tmp/gcloud-key.json
+          chmod 600 /tmp/gcloud-key.json
+
+      - name: 🔐 Autenticarse en Google Cloud con la cuenta de servicio
+        run: |
+          gcloud auth activate-service-account kustomer@raw-superapp.iam.gserviceaccount.com --key-file=/tmp/gcloud-key.json
+          gcloud auth list  # Verifica qué cuenta está autenticada
+          gcloud config set project raw-superapp
+
+      - name: 🛠️ Configurar Docker para autenticación con Container Registry
+        run: |
+          gcloud auth configure-docker gcr.io
+          gcloud config set project raw-superapp
+
+      - name: 🏗️ Construir la imagen Docker con GitHub token
+        run: |
+          docker build \
+            --build-arg GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN_PRIVATE }} \
+            -t gcr.io/raw-superapp/dbt-mcp-server:${{ github.sha }} \
+            .
+
+      - name: 🚀 Subir la imagen a Container Registry
+        run: |
+          docker push gcr.io/raw-superapp/dbt-mcp-server:${{ github.sha }}
+
+      - name: 🌐 Desplegar o actualizar Cloud Run Service
+        run: |
+          gcloud run deploy dbt-mcp-server \
+            --image=gcr.io/raw-superapp/dbt-mcp-server:${{ github.sha }} \
+            --platform=managed \
+            --region=us-central1 \
+            --allow-unauthenticated \
+            --memory=2Gi \
+            --cpu=2 \
+            --timeout=3600 \
+            --concurrency=10 \
+            --max-instances=5 \
+            --min-instances=0 \
+            --port=8080 \
+            --set-env-vars=ENVIRONMENT=production \
+            --set-env-vars=DBT_HOST=cloud.getdbt.com \
+            --set-env-vars=DBT_PROD_ENV_ID=${{ secrets.DBT_PROD_ENV_ID }} \
+            --set-env-vars=DBT_USER_ID=${{ secrets.DBT_USER_ID }} \
+            --set-env-vars=DBT_TOKEN=${{ secrets.DBT_TOKEN }} \
+            --set-env-vars=DBT_CLI_TIMEOUT=120 \
+            --set-env-vars=DBT_PROJECT_DIR=/app/bi-dbt-bigquery-models \
+            --set-env-vars=DBT_PATH=/app/bi-dbt-bigquery-models/dbt_env/bin/dbt \
+            --set-env-vars=DBT_PROFILES_DIR=/root/.dbt \
+            --set-env-vars=DISABLE_DBT_CLI=false
+
+      - name: 📊 Mostrar información del servicio desplegado
+        run: |
+          SERVICE_URL=$(gcloud run services describe dbt-mcp-server --region=us-central1 --format="value(status.url)")
+          echo "✅ Deployment completed successfully!"
+          echo "🌐 Service URL: $SERVICE_URL"
+          echo "📊 Console: https://console.cloud.google.com/run/detail/us-central1/dbt-mcp-server/metrics?project=raw-superapp"
