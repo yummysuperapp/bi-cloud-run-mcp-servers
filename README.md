@@ -2,6 +2,7 @@
 
 A Model Context Protocol (MCP) server that integrates with dbt projects and BigQuery, deployed on Google Cloud Run.
 
+
 ## Overview
 
 This project deploys an MCP server that provides AI assistants (like Claude) with access to your dbt models, metrics, and BigQuery data warehouse through the dbt Cloud API. The server runs as a containerized service on Google Cloud Run with automatic scaling.
