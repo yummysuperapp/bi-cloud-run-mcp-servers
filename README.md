@@ -22,7 +22,7 @@ This project deploys an MCP server that provides AI assistants (like Claude) wit
 ```
 AI Assistant (Claude/VS Code) + MCP Extension
     ↓ (SSE Transport)
-Cloud Run Service (dbt-mcp-server)
+Cloud Run Service (dbt-mcp)
     ↓
 dbt Cloud API + BigQuery
 ```
@@ -60,7 +60,7 @@ Edit `config.local.sh` with your values:
 # Google Cloud Configuration
 export PROJECT_ID="your-gcp-project-id"
 export REGION="us-central1"
-export SERVICE_NAME="dbt-mcp-server"
+export SERVICE_NAME="dbt-mcp"
 
 # dbt Cloud Configuration
 export DBT_HOST="cloud.getdbt.com"
@@ -270,7 +270,7 @@ The deployment automatically sets these environment variables in Cloud Run:
    echo -n "your-dbt-token" | gcloud secrets create dbt-token --data-file=-
    
    # Update Cloud Run deployment to use secrets
-   gcloud run services update dbt-mcp-server \
+   gcloud run services update dbt-mcp \
      --update-secrets=DBT_TOKEN=dbt-token:latest
    ```
 
@@ -281,7 +281,7 @@ The deployment automatically sets these environment variables in Cloud Run:
 
 4. **Enable Cloud Run authentication** (optional):
    ```bash
-   gcloud run services update dbt-mcp-server \
+   gcloud run services update dbt-mcp \
      --no-allow-unauthenticated
    ```
 
@@ -355,7 +355,7 @@ curl -H "Authorization: Bearer $DBT_TOKEN" \
 **Container Crashes**:
 ```bash
 # View detailed logs
-gcloud run services logs read dbt-mcp-server \
+gcloud run services logs read dbt-mcp \
   --region=$REGION \
   --project=$PROJECT_ID \
   --limit=100
@@ -384,10 +384,10 @@ gcloud run services logs read dbt-mcp-server \
 
 ```bash
 # Real-time logs
-gcloud run services logs tail dbt-mcp-server --region=$REGION
+gcloud run services logs tail dbt-mcp --region=$REGION
 
 # Historical logs
-gcloud run services logs read dbt-mcp-server \
+gcloud run services logs read dbt-mcp \
   --region=$REGION \
   --limit=100
 ```

@@ -4,7 +4,7 @@
 # Google Cloud Project Configuration
 export PROJECT_ID="your-project-id"
 export REGION="us-central1"
-export SERVICE_NAME="dbt-mcp-server"
+export SERVICE_NAME="dbt-mcp"
 
 # dbt Cloud Configuration
 export DBT_HOST="cloud.getdbt.com"
