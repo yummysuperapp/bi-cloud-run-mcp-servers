@@ -1,4 +1,4 @@
-# dbt MCP Server on Google Cloud Run 
+# dbt MCP Server on Google Cloud Run
 
 A Model Context Protocol (MCP) server that integrates with dbt projects and BigQuery, deployed on Google Cloud Run.
 
