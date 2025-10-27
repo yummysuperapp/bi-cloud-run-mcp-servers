@@ -107,8 +107,8 @@ jobs:
           
           docker build \
             --build-arg GITHUB_TOKEN=${{ secrets.GH_TOKEN }} \
-            -t us-central1-docker.pkg.dev/$DEPLOY_PROJECT/cloud-run-source-deploy/dbt-mcp-server:${{ github.sha }} \
-            -t us-central1-docker.pkg.dev/$DEPLOY_PROJECT/cloud-run-source-deploy/dbt-mcp-server:latest \
+            -t us-central1-docker.pkg.dev/$DEPLOY_PROJECT/cloud-run-source-deploy/bi-dbt-mcp:${{ github.sha }} \
+            -t us-central1-docker.pkg.dev/$DEPLOY_PROJECT/cloud-run-source-deploy/bi-dbt-mcp:latest \
             .
 
       - name: 🧹 Limpiar credenciales temporales
@@ -120,24 +120,24 @@ jobs:
       - name: 🚀 Subir la imagen a Artifact Registry
         run: |
           DEPLOY_PROJECT=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key-deploy.json'))['project_id'])")
-          docker push us-central1-docker.pkg.dev/$DEPLOY_PROJECT/cloud-run-source-deploy/dbt-mcp-server:${{ github.sha }}
-          docker push us-central1-docker.pkg.dev/$DEPLOY_PROJECT/cloud-run-source-deploy/dbt-mcp-server:latest
+          docker push us-central1-docker.pkg.dev/$DEPLOY_PROJECT/cloud-run-source-deploy/bi-dbt-mcp:${{ github.sha }}
+          docker push us-central1-docker.pkg.dev/$DEPLOY_PROJECT/cloud-run-source-deploy/bi-dbt-mcp:latest
 
       - name: 🌐 Desplegar o actualizar Cloud Run Service
         run: |
           DEPLOY_PROJECT=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key-deploy.json'))['project_id'])")
           
-          gcloud run deploy dbt-mcp-server \
-            --image=us-central1-docker.pkg.dev/$DEPLOY_PROJECT/cloud-run-source-deploy/dbt-mcp-server:${{ github.sha }} \
+          gcloud run deploy bi-dbt-mcp \
+            --image=us-central1-docker.pkg.dev/$DEPLOY_PROJECT/cloud-run-source-deploy/bi-dbt-mcp:${{ github.sha }} \
             --platform=managed \
             --region=us-central1 \
             --allow-unauthenticated \
-            --memory=2Gi \
-            --cpu=2 \
-            --timeout=3600 \
-            --concurrency=10 \
-            --max-instances=5 \
-            --min-instances=0 \
+            --memory=4Gi \
+            --cpu=4 \
+            --timeout=600 \
+            --concurrency=100 \
+            --max-instances=3 \
+            --min-instances=1 \
             --port=8080 \
             --set-env-vars=ENVIRONMENT=production \
             --set-env-vars=DBT_HOST=cloud.getdbt.com \
@@ -156,12 +156,12 @@ jobs:
           DEPLOY_PROJECT=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key-deploy.json'))['project_id'])")
           DBT_PROJECT=$(python3 -c "import json; print(json.load(open('/tmp/gcloud-key-dbt.json'))['project_id'])" 2>/dev/null || echo "yummy-development")
           
-          SERVICE_URL=$(gcloud run services describe dbt-mcp-server --region=us-central1 --project=$DEPLOY_PROJECT --format="value(status.url)")
+          SERVICE_URL=$(gcloud run services describe bi-dbt-mcp --region=us-central1 --project=$DEPLOY_PROJECT --format="value(status.url)")
           echo ""
           echo "✅ Deployment completed successfully!"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "🌐 Service URL: $SERVICE_URL"
-          echo "📊 Console: https://console.cloud.google.com/run/detail/us-central1/dbt-mcp-server/metrics?project=$DEPLOY_PROJECT"
+          echo "📊 Console: https://console.cloud.google.com/run/detail/us-central1/bi-dbt-mcp/metrics?project=$DEPLOY_PROJECT"
           echo ""
           echo "🔐 Service Accounts utilizados:"
           echo "   • Deployment/CI/CD: $DEPLOY_PROJECT (raw-superapp)"
